@@ -12,6 +12,9 @@ because implements the QFT sequentially, uses less qubits then when using a "nor
 from qiskit import QuantumCircuit, ClassicalRegister, QuantumRegister
 from qiskit import execute, IBMQ
 from qiskit import BasicAer
+from qiskit import Aer
+from qiskit.visualization import plot_histogram
+from qiskit.providers.aer import AerSimulator, QasmSimulator
 
 import sys
 
@@ -20,6 +23,7 @@ import math
 import array
 import fractions
 import numpy as np
+import time
 
 """ Function to check if N is of type q^p"""
 def check_if_power(N):
@@ -104,12 +108,12 @@ def get_value_a(N):
 
 """ Function to apply the continued fractions to find r and the gcd to find the desired factors"""
 def get_factors(x_value,t_upper,N,a):
-
+    print(x_value)
     if x_value<=0:
-        print('x_value is <= 0, there are no continued fractions\n')
+        # print('x_value is <= 0, there are no continued fractions\n')
         return False
 
-    print('Running continued fractions for this case\n')
+    # print('Running continued fractions for this case\n')
 
     """ Calculate T and x/T """
     T = pow(2,t_upper)
@@ -133,6 +137,7 @@ def get_factors(x_value,t_upper,N,a):
         on the previous terms as the rule suggests"""
 
         if i>0:
+            print(x_value, N, a)
             b.append( math.floor( 1 / (t[i-1]) ) ) 
             t.append( ( 1 / (t[i-1]) ) - b[i] )
 
@@ -147,20 +152,19 @@ def get_factors(x_value,t_upper,N,a):
         aux = aux + b[0]
 
         """Get the denominator from the value obtained"""
-        frac = fractions.Fraction(aux).limit_denominator()
+        frac = fractions.Fraction(aux).limit_denominator(N)
         den=frac.denominator
-
-        print('Approximation number {0} of continued fractions:'.format(i+1))
-        print("Numerator:{0} \t\t Denominator: {1}\n".format(frac.numerator,frac.denominator))
+        # print('Approximation number {0} of continued fractions:'.format(i+1))
+        # print("Numerator:{0} \t\t Denominator: {1}\n".format(frac.numerator,frac.denominator))
 
         """ Increment i for next iteration """
         i=i+1
 
         if (den%2) == 1:
             if i>=15:
-                print('Returning because have already done too much tries')
+                # print('Returning because have already done too much tries')
                 return False
-            print('Odd denominator, will try next iteration of continued fractions\n')
+            # print('Odd denominator, will try next iteration of continued fractions\n')
             continue
     
         """ If denominator even, try to get factors of N """
@@ -170,16 +174,19 @@ def get_factors(x_value,t_upper,N,a):
         exponential = 0
 
         if den<1000:
-            exponential=pow(a , (den/2))
+            a = int(a)
+            exp = int(den/2)
+            exponential=pow(a , exp)
         
         """ Check if the value is too big or not """
-        if math.isinf(exponential)==1 or exponential>1000000000:
-            print('Denominator of continued fraction is too big!\n')
-            aux_out = input('Input number 1 if you want to continue searching, other if you do not: ')
-            if aux_out != '1':
-                return False
-            else:
-                continue
+        if exponential>1000000000:
+            # print('Denominator of continued fraction is too big!\n')
+            # aux_out = input('Input number 1 if you want to continue searching, other if you do not: ')
+            # if aux_out != '1':
+            return False
+            # else:
+            #     continue
+            # continue
 
         """If the value is not to big (infinity), then get the right values and
         do the proper gcd()"""
@@ -193,24 +200,26 @@ def get_factors(x_value,t_upper,N,a):
     
         """ Check if the factors found are trivial factors or are the desired
         factors """
-
-        if one_factor==1 or one_factor==N or other_factor==1 or other_factor==N:
-            print('Found just trivial factors, not good enough\n')
+        print(one_factor)
+        if (one_factor==1 or one_factor==N) or (other_factor==1 or other_factor==N):
+            # print('Found just trivial factors, not good enough\n')
             """ Check if the number has already been found, use i-1 because i was already incremented """
+            # print(i, t[i - 1])
             if t[i-1]==0:
-                print('The continued fractions found exactly x_final/(2^(2n)) , leaving funtion\n')
+                # print('The continued fractions found exactly x_final/(2^(2n)) , leaving funtion\n')
                 return False
             if i<15:
-                aux_out = input('Input number 1 if you want to continue searching, other if you do not: ')
-                if aux_out != '1':
-                    return False       
+                # aux_out = input('Input number 1 if you want to continue searching, other if you do not: ')
+                # if aux_out != '1':
+                #     return False       
+                pass
             else:
                 """ Return if already too much tries and numbers are huge """ 
-                print('Returning because have already done too many tries\n')
+                # print('Returning because have already done too many tries\n')
                 return False         
         else:
-            print('The factors of {0} are {1} and {2}\n'.format(N,one_factor,other_factor))
-            print('Found the desired factors!\n')
+            # print('The factors of {0} are {1} and {2}\n'.format(N,one_factor,other_factor))
+            # print('Found the desired factors!\n')
             return True
 
 """Functions that calculate the modular inverse using Euclid's algorithm"""
@@ -240,7 +249,7 @@ def create_QFT(circuit,up_reg,n,with_swaps):
         j=i-1  
         while j>=0:
             if (np.pi)/(pow(2,(i-j))) > 0:
-                circuit.cu1( (np.pi)/(pow(2,(i-j))) , up_reg[i] , up_reg[j] )
+                circuit.cp( (np.pi)/(pow(2,(i-j))) , up_reg[i] , up_reg[j] )
                 j=j-1   
         i=i-1  
 
@@ -273,7 +282,7 @@ def create_inverse_QFT(circuit,up_reg,n,with_swaps):
             y=i
             while y>=0:
                  if (np.pi)/(pow(2,(j-y))) > 0:
-                    circuit.cu1( - (np.pi)/(pow(2,(j-y))) , up_reg[j] , up_reg[y] )
+                    circuit.cp( - (np.pi)/(pow(2,(j-y))) , up_reg[j] , up_reg[y] )
                     y=y-1   
         i=i+1
 
@@ -303,11 +312,11 @@ def getAngles(a,N):
 
 """Creation of a doubly controlled phase gate"""
 def ccphase(circuit, angle, ctl1, ctl2, tgt):
-    circuit.cu1(angle/2,ctl1,tgt)
+    circuit.cp(angle/2,ctl1,tgt)
     circuit.cx(ctl2,ctl1)
-    circuit.cu1(-angle/2,ctl1,tgt)
+    circuit.cp(-angle/2,ctl1,tgt)
     circuit.cx(ctl2,ctl1)
-    circuit.cu1(angle/2,ctl2,tgt)
+    circuit.cp(angle/2,ctl2,tgt)
 
 """Creation of the circuit that performs addition by a in Fourier Space"""
 """Can also be used for subtraction by setting the parameter inv to a value different from 0"""
@@ -315,10 +324,10 @@ def phiADD(circuit, q, a, N, inv):
     angle=getAngles(a,N)
     for i in range(0,N):
         if inv==0:
-            circuit.u1(angle[i],q[i])
+            circuit.p(angle[i],q[i])
             """addition"""
         else:
-            circuit.u1(-angle[i],q[i])
+            circuit.p(-angle[i],q[i])
             """subtraction"""
 
 """Single controlled version of the phiADD circuit"""
@@ -326,9 +335,9 @@ def cphiADD(circuit, q, ctl, a, n, inv):
     angle=getAngles(a,n)
     for i in range(0,n):
         if inv==0:
-            circuit.cu1(angle[i],ctl,q[i])
+            circuit.cp(angle[i],ctl,q[i])
         else:
-            circuit.cu1(-angle[i],ctl,q[i])
+            circuit.cp(-angle[i],ctl,q[i])
         
 """Doubly controlled version of the phiADD circuit"""
 def ccphiADD(circuit,q,ctl1,ctl2,a,n,inv):
@@ -390,10 +399,25 @@ def cMULTmodN(circuit, ctl, q, aux, a, N, n):
         i -= 1
     create_inverse_QFT(circuit, aux, n+1, 0)
 
+def show_good_coef(results, n):
+    i=0
+    max = pow(2,n)
+    """ Iterate to all possible states """
+    while i<max:
+        binary = bin(i)[2:].zfill(n)
+        number = results.item(i)
+        number = round(number.real, 3) + round(number.imag, 3) * 1j
+        """ Print the respective component of the state if it has a non-zero coeficient """
+        if number!=0:
+            print('|{}>'.format(binary),number)
+        i=i+1
+
 """ Main program """
 if __name__ == '__main__':
 
     """ Ask for analysis number N """   
+
+    t0 = time.time()
 
     N = int(input('Please insert integer number N: '))
 
@@ -426,7 +450,7 @@ if __name__ == '__main__':
     IBMQ.load_accounts()"""
 
     """ Get an integer a that is coprime with N """
-    a = get_value_a(N)
+    a = int(input('Please insert integer number a: '))
 
     """ If user wants to force some values, can do that here, please make sure to update print and that N and a are coprime"""
     """print('Forcing N=15 and a=4 because its the fastest case, please read top of source file for more info')
@@ -466,11 +490,12 @@ if __name__ == '__main__':
         """cycle through all possible values of the classical register and apply the corresponding conditional phase shift"""
         for j in range(0, 2**i):
             """the phase shift is applied if the value of the classical register matches j exactly"""
-            circuit.u1(getAngle(j, i), up_reg[0]).c_if(up_classic, j)
+            circuit.p(getAngle(j, i), up_reg[0]).c_if(up_classic, j)
         circuit.h(up_reg)
         circuit.measure(up_reg[0], up_classic[i])
         circuit.measure(up_reg[0], c_aux[0])
 
+    start = time.time()
     """ Select how many times the circuit runs"""
     number_shots=int(input('Number of times to run the circuit: '))
     if number_shots < 1:
@@ -481,48 +506,31 @@ if __name__ == '__main__':
     print('Executing the circuit {0} times for N={1} and a={2}\n'.format(number_shots,N,a))
 
     """ Simulate the created Quantum Circuit """
-    simulation = execute(circuit, backend=BasicAer.get_backend('qasm_simulator'),shots=number_shots)
+    # backend = QasmSimulator(method='statevector', max_parallel_threads = 56)
+    simulator_gpu = Aer.get_backend('aer_simulator', max_parallel_threads = 48)
+    # simulator_gpu.set_options(device='GPU')
+    simulation = execute(circuit, backend=simulator_gpu,shots=number_shots)
+    # from guppy import hpy
+    # h = hpy()
+    # print(h.heap())
     """ to run on IBM, use backend=IBMQ.get_backend('ibmq_qasm_simulator') in execute() function """
     """ to run locally, use backend=BasicAer.get_backend('qasm_simulator') in execute() function """
 
     """ Get the results of the simulation in proper structure """
     sim_result=simulation.result()
     counts_result = sim_result.get_counts(circuit)
-
+    # import matplotlib.pyplot as plt
+    # plot_histogram(counts_result)
+    # plt.show()
+    end = time.time()
     """ Print info to user from the simulation results """
+    # show_good_coef(counts_result, 2 * n)
     print('Printing the various results followed by how many times they happened (out of the {} cases):\n'.format(number_shots))
     i=0
     while i < len(counts_result):
-        print('Result \"{0}\" happened {1} times out of {2}'.format(list(sim_result.get_counts().keys())[i],list(sim_result.get_counts().values())[i],number_shots))
+        print('Result \"{0}({1})\" happened {2} times out of {3}'.format(list(sim_result.get_counts().keys())[i], int(list(sim_result.get_counts().keys())[i].split(' ')[1], 2), list(sim_result.get_counts().values())[i],number_shots))
         i=i+1
     
-    """ An empty print just to have a good display in terminal """
-    print(' ')
-
-    """ Initialize this variable """
-    prob_success=0
-    
-    """ For each simulation result, print proper info to user and try to calculate the factors of N"""
-    i=0
-    while i < len(counts_result):
-
-        """ Get the x_value from the final state qubits """
-        all_registers_output = list(sim_result.get_counts().keys())[i]
-        output_desired = all_registers_output.split(" ")[1]
-        x_value = int(output_desired, 2)
-        prob_this_result = 100 * ( int( list(sim_result.get_counts().values())[i] ) ) / (number_shots)
-
-        print("------> Analysing result {0}. This result happened in {1:.4f} % of all cases\n".format(output_desired,prob_this_result))
-
-        """ Print the final x_value to user """
-        print('In decimal, x_final value for this result is: {0}\n'.format(x_value))
-
-        """ Get the factors using the x value obtained """   
-        success = get_factors(int(x_value),int(2*n),int(N),int(a))
-
-        if success==True:
-            prob_success = prob_success + prob_this_result
-
-        i=i+1
-
-    print("\nUsing a={0}, found the factors of N={1} in {2:.4f} % of the cases\n".format(a,N,prob_success))
+    print('build time: %f'%(start - t0))
+    print('time used is %f'%(end - start))
+    print('exec time: ', sim_result.time_taken)
